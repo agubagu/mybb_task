@@ -18,7 +18,7 @@ SOURCE="./mybb-source"
 TARGET="/var/www/html"
 
 #Preparation
-if [[ ! -e ./${SOURCE} ]]
+if [[ ! -e ./${SOURCE} ]]; then
   mkdir ./mybb-source
 fi
 cd $SOURCE
@@ -26,7 +26,7 @@ curl https://resources.mybb.com/downloads/mybb_1812.zip -o mybb.zip
 unzip mybb.zip "Upload/*"
 mv Upload/* .
 rm -Rf Upload mybb.zip
-
+cd ../
 
 # Clean-up and copy files.
 rm -rf "$TARGET"/*
