@@ -35,12 +35,18 @@ cp -r "$SOURCE"/* "$TARGET"/
 # Prepare and copy dynamic configuration files.
 
 cp -a ./${CONFIG}/mybb_nginx.conf $NGINX_CONF/default.conf
+
+#Tweak for supporting ELB DNS name as service name in Nginx
+sed -ie "s/^.*hash_max_size .*$/server_names_hash_bucket_size 128;\nserver_names_hash_max_size 128;\ntypes_hash_max_size 2048;/g" /etc/nginx/nginx.conf
+
+#Nginx configuration
 sed -ie "s/MYBB_DOMAINNAME/${MYBB_DOMAINNAME}/g" ${NGINX_CONF}/default.conf 
 touch /var/log/nginx/access.log && chown nginx:nginx  /var/log/nginx/access.log 
 touch /var/log/nginx/error.log && chown nginx:nginx  /var/log/nginx/error.log 
 
 service nginx reload
 
+#Application configuration
 sed -e "s/MYBB_ADMINEMAIL/${MYBB_ADMINEMAIL}/g" \
     -e "s/MYBB_DOMAINNAME/${MYBB_DOMAINNAME}/g" \
     "${CONFIG}/settings.php" > "${TARGET}/inc/settings.php"
