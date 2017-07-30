@@ -49,7 +49,8 @@ sed -ie "s/MYBB_DOMAINNAME/${MYBB_DOMAINNAME}/g" ${NGINX_CONF}/default.conf
 touch /var/log/nginx/access.log && chown nginx:nginx  /var/log/nginx/access.log
 touch /var/log/nginx/error.log && chown nginx:nginx  /var/log/nginx/error.log
 
-service nginx reload
+/sbin/service nginx reload
+
 
 #Application configuration
 sed -e "s/MYBB_ADMINEMAIL/${MYBB_ADMINEMAIL}/g" \
