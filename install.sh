@@ -12,6 +12,7 @@ echo $MYBB_DBHOSTNAME
 echo $MYBB_DBPORT
 
 # Configuration.
+FPM_CONF="/etc/php-fpm.d"
 NGINX_CONF="/etc/nginx/conf.d"
 CONFIG="./mybb-config"
 SOURCE="./mybb-source"
@@ -32,9 +33,13 @@ cd ../
 rm -rf "$TARGET"/*
 cp -r "$SOURCE"/* "$TARGET"/
 
-# Prepare and copy dynamic configuration files.
 
+#PHP-FPM configuration
+cp -a ./{$CONFIG}/mybb_fpm.conf $FPM_CONF/www.conf && service php-fpm restart
+
+#Nginx vhost configuration
 cp -a ./${CONFIG}/mybb_nginx.conf $NGINX_CONF/default.conf
+
 
 #Tweak for supporting ELB DNS name as service name in Nginx
 sed -ie "s/^.*hash_max_size .*$/server_names_hash_bucket_size 128;\nserver_names_hash_max_size 128;\ntypes_hash_max_size 2048;/g" /etc/nginx/nginx.conf
@@ -57,6 +62,8 @@ sed -e "s/MYBB_DBNAME/${MYBB_DBNAME}/g" \
     -e "s/MYBB_DBHOSTNAME/${MYBB_DBHOSTNAME}/g" \
     -e "s/MYBB_DBPORT/${MYBB_DBPORT}/g" \
     "${CONFIG}/config.php" > "${TARGET}/inc/config.php"
+
+
 
 # Initialize database.
 #sed -e "s/MYBB_ADMINEMAIL/${MYBB_ADMINEMAIL}/g" \
