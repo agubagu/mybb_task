@@ -689,7 +689,7 @@
             "commands": {
               "install": {
                 "command": "/bin/bash ./install.sh",
-                "cwd": "/tmp/mybb/Source",
+                "cwd": "/tmp/mybb_installation",
                 "env": {
                   "MYBB_DOMAINNAME": { "Fn::GetAtt": [ "MyBBBalancer", "DNSName" ] },
                   "MYBB_ADMINEMAIL": { "Ref": "OperatorEMail" },
