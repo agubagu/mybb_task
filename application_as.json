@@ -107,9 +107,9 @@
     },
     "DBStorageType" : {
       "Description" : "RDS Storage type",
-      "Default" : "standart",
-      "AllowedValues" : [ "standart", "gp2" ],
-      "ConstraintDescription" : "Storage can be only of type standart or gp2",
+      "Default" : "standard",
+      "AllowedValues" : [ "standard", "gp2" ],
+      "ConstraintDescription" : "Storage can be only of type standard or gp2",
       "Type": "String"
     },
     "DBSnapshotIdentifier" : {
@@ -431,6 +431,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Controls access to RDS instance",
+        "VpcId": { "Ref": "MyVPC" },
         "Tags": [{
             "Key": "Name",
             "Value": {
@@ -614,13 +615,16 @@
           { "Ref": "PublicSubnetA" },
           { "Ref": "PublicSubnetB" }
         ],
-        "NotificationConfigurations" : {
+        "NotificationConfigurations" : [
+        {
           "TopicARN" : { "Ref" : "NotificationTopic" },
-          "NotificationTypes" : [ "autoscaling:EC2_INSTANCE_LAUNCH",
-                                  "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
-                                  "autoscaling:EC2_INSTANCE_TERMINATE",
-                                  "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"]
-        }
+          "NotificationTypes" : [
+            "autoscaling:EC2_INSTANCE_LAUNCH",
+            "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+            "autoscaling:EC2_INSTANCE_TERMINATE",
+            "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+          ]
+        }]
       },
       "CreationPolicy" : {
         "ResourceSignal" : {
@@ -689,7 +693,7 @@
                 "cwd": "/tmp/mybb/Source",
                 "env": {
                   "MYBB_DOMAINNAME": { "Fn::GetAtt": [ "MyBBBalancer", "DNSName" ] },
-                  "MYBB_ADMINEMAIL": { "Ref": "OperationalEMail" },
+                  "MYBB_ADMINEMAIL": { "Ref": "OperatorEMail" },
                   "MYBB_DBNAME": { "Ref": "DBName" },
                   "MYBB_DBUSERNAME": { "Ref": "DBUsername" },
                   "MYBB_DBPASSWORD": { "Ref": "DBPassword" },
@@ -720,14 +724,14 @@
         }
       },
       "Properties": {
-        "KeyName": { "Ref": "SSHKeyName" },
+        "KeyName": { "Ref": "KeyName" },
         "InstanceType": {
           "Ref": "InstanceType"
         },
         "SecurityGroups": [
           {"Fn::GetAtt": ["WEBSecurityGroup", "GroupId"]}, {"Fn::GetAtt": ["SSHSecurityGroup", "GroupId"]}
         ],
-        "ImageId": { "Fn::FindInMap": [ "AMIByRegion", { "Ref": "AWS::Region" }, "hvm64" ] },
+        "ImageId": { "Fn::FindInMap": [ "AMIId", { "Ref": "AWS::Region" }, "hvm64" ] },
         "UserData": { "Fn::Base64": { "Fn::Join": ["", [
           "#!/bin/bash -xe\n",
           "yum update -y aws-cfn-bootstrap\n",
