@@ -1,0 +1,808 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "MyBB EC2 infrastructure creation",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+      {
+        "Label": { "default" : "Security groups information" },
+        "Parameters": ["ELBSecurityGroupName", "WEBLocation", "ManagementLocation", "SSHLocation", "SSHSecurityGroupName", "WEBSecurityGroupName", "ManagementSecurityGroupName", "RDSSecurityGroupName"]
+      },
+      {
+        "Label": { "default" : "Database information" },
+        "Parameters": ["DBInstanceName", "DBStorageType", "DBSnapshotIdentifier", "DBName", "DBClass", "DBAllocatedStorage", "DBMultiAZ", "DBUsername", "DBPassword"]
+      },
+      {
+        "Label": { "default" : "Instance specific information" },
+        "Parameters": ["KeyName", "OperatorEMail", "InstanceType", "InstanceName", "SSHSecurityGroupName", "WEBSecurityGroupName", "ManagementSecurityGroupName", "RDSSecurityGroupName"]
+      }
+    ]
+    }
+  },
+  "Parameters": {
+    "ELBSecurityGroupName": {
+      "Default": "ELB-ACCESS",
+      "MinLength" : "5",
+      "MaxLength" : "20",
+      "Type": "String"
+    },
+    "SSHSecurityGroupName": {
+      "Default": "SSH-ACCESS",
+      "MinLength" : "5",
+      "MaxLength" : "20",
+      "Type": "String"
+    },
+    "WEBSecurityGroupName": {
+      "Default": "WEB-ACCESS",
+      "MinLength" : "5",
+      "MaxLength" : "20",
+      "Type": "String"
+    },
+    "ManagementSecurityGroupName": {
+      "Default": "MGMT-ACCESS",
+      "MinLength" : "5",
+      "MaxLength" : "20",
+      "Type": "String"
+    },
+    "RDSSecurityGroupName": {
+      "Default": "RDS-ACCESS",
+      "MinLength" : "5",
+      "MaxLength" : "20",
+      "Type": "String"
+    },
+    "WEBLocation": {
+      "Description": "The IP address range which will be allowed to access WEB",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "ManagementLocation": {
+      "Description": "The IP address range which will be allowed to access Management on this server",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "SSHLocation": {
+      "Description": "The IP address range which will be allowed to SSH to this server",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "KeyName": {
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the instance",
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "ConstraintDescription": "must be the name of an existing EC2 KeyPair."
+    },
+    "OperatorEMail": {
+      "Description": "EMail address to notify if there are any scaling operations",
+      "Type": "String",
+      "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+      "ConstraintDescription": "must be a valid email address."
+    },
+    "InstanceType": {
+      "Description": "WebServer EC2 instance type",
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": ["t1.micro", "t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "m1.small", "m1.medium", "m1.large", "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "m4.large", "m4.xlarge", "m4.2xlarge", "m4.4xlarge", "m4.10xlarge", "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge", "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge", "g2.2xlarge", "g2.8xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge", "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge", "hi1.4xlarge", "hs1.8xlarge", "cr1.8xlarge", "cc2.8xlarge", "cg1.4xlarge"],
+      "ConstraintDescription": "must be a valid EC2 instance type."
+    },
+    "InstanceName": {
+      "Description": "Instance name",
+      "Type": "String",
+      "Default": "EC2-MYBB-TEST"
+    },
+    "DBInstanceName" : {
+      "Description" : "RDS Instance name",
+      "Default" : "RDS-MYBB-TEST",
+      "Type": "String"
+    },
+    "DBStorageType" : {
+      "Description" : "RDS Storage type",
+      "Default" : "standart",
+      "AllowedValues" : [ "standart", "gp2" ],
+      "ConstraintDescription" : "Storage can be only of type standart or gp2",
+      "Type": "String"
+    },
+    "DBSnapshotIdentifier" : {
+      "Description" : "DBSnapshot name. Instance will be restored from it if provided",
+      "Default" : "",
+      "Type": "String"
+    },
+    "DBName" : {
+      "Default": "mybbdb",
+      "Description" : "The database name. NOT NEEDED IF DB Snapshot is used",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+    },
+    "DBClass": {
+      "Description" : "The database instance type",
+      "Type": "String",
+      "Default": "db.t2.micro",
+      "AllowedValues" : [ "db.t1.micro", "db.m1.small", "db.m1.medium", "db.m1.large", "db.m1.xlarge", "db.m2.xlarge", "db.m2.2xlarge", "db.m2.4xlarge", "db.m3.medium", "db.m3.large", "db.m3.xlarge", "db.m3.2xlarge", "db.m4.large", "db.m4.xlarge", "db.m4.2xlarge", "db.m4.4xlarge", "db.m4.10xlarge", "db.r3.large", "db.r3.xlarge", "db.r3.2xlarge", "db.r3.4xlarge", "db.r3.8xlarge", "db.m2.xlarge", "db.m2.2xlarge", "db.m2.4xlarge", "db.cr1.8xlarge", "db.t2.micro", "db.t2.small", "db.t2.medium", "db.t2.large"],
+      "ConstraintDescription" : "must select a valid database instance type."
+    },
+    "DBAllocatedStorage" : {
+      "Default": "5",
+      "Description" : "The size of the database (Gb)",
+      "Type": "Number",
+      "MinValue": "5",
+      "MaxValue": "1024",
+      "ConstraintDescription" : "must be between 5 and 1024Gb."
+    },
+    "DBMultiAZ": {
+      "Default": "false",
+      "Description" : "Create a Multi-AZ MySQL Amazon RDS database instance",
+      "Type": "String",
+      "AllowedValues" : [ "true", "false" ],
+      "ConstraintDescription" : "must be either true or false."
+    },
+    "DBUsername" : {
+      "Default": "mybb",
+      "Description" : "Database user name. NOT NEEDED IF DB Snapshot is used",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "AllowedPattern" : "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+    },
+    "DBPassword" : {
+      "Description" : "DB Instance master password. NOT NEEDED IF DB Snapshot is used",
+      "Type": "String",
+      "MinLength": "8",
+      "Default": "supersecurepassword",
+      "NoEcho": true,
+      "ConstraintDescription" : "must be longer than 8 symbols begin with a letter and contain only alphanumeric characters."
+    }
+  },
+  "Conditions" : {
+    "UseDbSnapshot" : {
+      "Fn::Not" : [{
+        "Fn::Equals" : [
+          {"Ref" : "DBSnapshotIdentifier"},
+          ""
+        ]
+      }]
+    }
+  },
+  "Mappings": {
+    "Subnets": {
+      "MyVPC": {
+        "CidrBlock": "10.0.0.0/16"
+      },
+      "PublicSubnetA": {
+        "CidrBlock": "10.0.0.0/24"
+      },
+      "PublicSubnetB": {
+        "CidrBlock": "10.0.1.0/24"
+      },
+      "PrivateSubnetA": {
+        "CidrBlock": "10.0.2.0/24"
+      },
+      "PrivateSubnetB": {
+        "CidrBlock": "10.0.3.0/24"
+      }
+    },
+    "AMIId": {
+      "us-east-1":      { "hvm64": "ami-a4c7edb2" },
+      "us-west-1":      { "hvm64": "ami-6df1e514" },
+      "us-west-2":      { "hvm64": "ami-327f5352" },
+      "eu-west-1":      { "hvm64": "ami-d7b9a2b1" },
+      "eu-central-1":   { "hvm64": "ami-82be18ed" },
+      "eu-west-2":      { "hvm64": "ami-ed100689" }
+    },
+    "ELBAccountId": {
+      "us-east-1":      { "AccountId": "127311923021" },
+      "us-west-1":      { "AccountId": "027434742980" },
+      "us-west-2":      { "AccountId": "797873946194" },
+      "eu-west-1":      { "AccountId": "156460612806" },
+      "eu-central-1":   { "AccountId": "589561097549" },
+      "eu-west-2":      { "AccountId": "589561097549" }
+    }
+  },
+  "Resources": {
+    "MyVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "CidrBlock": { "Fn::FindInMap": [ "Subnets", "MyVPC", "CidrBlock" ] },
+        "Tags": [{"Key": "Name", "Value": "NewVPC"}]
+      }
+    },
+    "VPCInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "VPCInternetGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": { "Ref": "MyVPC" },
+        "InternetGatewayId": { "Ref": "VPCInternetGateway" }
+      }
+    },
+    "PublicSubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "MyVPC" },
+        "AvailabilityZone": {
+          "Fn::Select": [ "0", { "Fn::GetAZs": "" } ]
+        },
+        "CidrBlock": { "Fn::FindInMap": [ "Subnets", "PublicSubnetA", "CidrBlock" ] },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "PublicSubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "MyVPC" },
+        "AvailabilityZone": {
+          "Fn::Select": [ "1", { "Fn::GetAZs": "" } ]
+        },
+        "CidrBlock": { "Fn::FindInMap": [ "Subnets", "PublicSubnetB", "CidrBlock" ] },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "PrivateSubnetA": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "MyVPC" },
+        "AvailabilityZone": {
+          "Fn::Select": [ "0", { "Fn::GetAZs": "" } ]
+        },
+        "CidrBlock": { "Fn::FindInMap": [ "Subnets", "PrivateSubnetA", "CidrBlock" ] }
+      }
+    },
+    "PrivateSubnetB": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "MyVPC" },
+        "AvailabilityZone": {
+          "Fn::Select": [ "1", { "Fn::GetAZs": "" } ]
+        },
+        "CidrBlock": { "Fn::FindInMap": [ "Subnets", "PrivateSubnetB", "CidrBlock" ] }
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "MyVPC" }
+      }
+    },
+    "RoutePublicSubnetToInternet": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "VPCInternetGateway",
+      "Properties": {
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "VPCInternetGateway" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "PublicSubnetARouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "SubnetId": { "Ref": "PublicSubnetA" }
+      }
+    },
+    "PublicSubnetBRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "SubnetId": { "Ref": "PublicSubnetB" }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "MyVPC" }
+      }
+    },
+    "PrivateSubnetARouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "PrivateRouteTable" },
+        "SubnetId": { "Ref": "PrivateSubnetA" }
+      }
+    },
+    "PrivateSubnetBRouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "PrivateRouteTable" },
+        "SubnetId": { "Ref": "PrivateSubnetB" }
+      }
+    },
+    "ELBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable restricted access from public networks",
+        "VpcId": {
+          "Ref": "MyVPC"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {
+            "Ref": "ELBSecurityGroupName"
+          }
+        }],
+        "SecurityGroupIngress": [{
+          "IpProtocol": "tcp",
+          "FromPort": "443",
+          "ToPort": "443",
+          "CidrIp": {
+            "Ref": "WEBLocation"
+          }
+        },
+        {
+          "IpProtocol": "tcp",
+          "FromPort": "80",
+          "ToPort": "80",
+          "CidrIp": {
+            "Ref": "WEBLocation"
+          }
+        },
+        {
+          "IpProtocol": "tcp",
+          "FromPort": "8080",
+          "ToPort": "8080",
+          "CidrIp": {
+            "Ref": "ManagementLocation"
+          }
+        },
+        {
+          "IpProtocol": "tcp",
+          "FromPort": "2222",
+          "ToPort": "2222",
+          "CidrIp": {
+            "Ref": "SSHLocation"
+          }
+        }]
+      }
+    },
+    "SSHSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Controls SSH access",
+        "VpcId": { "Ref": "MyVPC" },
+        "Tags": [{
+            "Key": "Name",
+            "Value": {
+              "Ref": "SSHSecurityGroupName"
+            }
+        }],
+        "SecurityGroupIngress": [{
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "SourceSecurityGroupId": { "Fn::GetAtt": ["ELBSecurityGroup", "GroupId"]}
+          }]
+      }
+    },
+    "WEBSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable HTTP access for instances",
+        "VpcId": { "Ref": "MyVPC" },
+        "Tags": [{
+            "Key": "Name",
+            "Value": {
+              "Ref": "WEBSecurityGroupName"
+            }
+        }],
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "80",
+            "ToPort": "80",
+            "SourceSecurityGroupId": { "Fn::GetAtt": ["ELBSecurityGroup", "GroupId"]}
+          }]
+      }
+    },
+    "ManagementSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable access for management instances",
+        "VpcId": { "Ref": "MyVPC" },
+        "Tags": [{
+            "Key": "Name",
+            "Value": {
+              "Ref": "ManagementSecurityGroupName"
+            }
+        }],
+        "SecurityGroupIngress": [{
+            "IpProtocol": "tcp",
+            "FromPort": "8080",
+            "ToPort": "8080",
+            "SourceSecurityGroupId": { "Fn::GetAtt": ["ELBSecurityGroup", "GroupId"]}
+          }]
+      }
+    },
+    "RDSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Controls access to RDS instance",
+        "Tags": [{
+            "Key": "Name",
+            "Value": {
+              "Ref": "RDSSecurityGroupName"
+            }
+        }],
+        "SecurityGroupIngress": [{
+            "IpProtocol": "tcp",
+            "FromPort": "3306",
+            "ToPort": "3306",
+            "SourceSecurityGroupId": {
+              "Fn::GetAtt": ["WEBSecurityGroup", "GroupId"]
+            }
+        }]
+      }
+    },
+    "NotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [ { "Endpoint": { "Ref": "OperatorEMail" }, "Protocol": "email" } ]
+      }
+    },
+    "MyBBManagementRole" : {
+      "Type": "AWS::IAM::Role",
+      "Properties" : {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+          {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": ["ec2.amazonaws.com"]
+            },
+            "Action": "sts:AssumeRole"
+          }]
+        }
+      }
+    },
+    "MyBBPOlicy": {
+      "Type": "AWS::IAM::ManagedPolicy",
+      "Properties": {
+      "Description" : "This policy allows management of AWS features from management server",
+      "PolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "ec2:*",
+            "rds:*",
+            "cloudformation:*"
+          ],
+          "Resource": "*"
+        }
+        ]
+      },
+      "Roles": [{
+        "Ref": "MyBBManagementRole"
+      }]
+    }
+  },
+  "S3LogBucket": {
+    "Type": "AWS::S3::Bucket",
+    "DeletionPolicy": "Retain"
+  },
+  "S3LogBucketPolicy": {
+    "Type": "AWS::S3::BucketPolicy",
+    "Properties": {
+      "Bucket": { "Ref": "S3LogBucket" },
+      "PolicyDocument": {
+      "Statement": [
+      {
+        "Effect": "Allow",
+        "Resource": { "Fn::Join": [ "", [ "arn:aws:s3:::", { "Ref": "S3LogBucket" }, "/*" ]] },
+        "Principal": {
+          "AWS": { "Fn::FindInMap": [ "ELBAccountId", { "Ref": "AWS::Region" }, "AccountId" ] }
+        },
+        "Action": [ "s3:PutObject" ]
+      }]
+      }
+    }
+  },
+  "MyBBBalancer": {
+    "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+    "DependsOn": "S3LogBucketPolicy",
+    "Properties": {
+      "Scheme": "internet-facing",
+      "CrossZone": true,
+      "SecurityGroups":[ 
+        {"Fn::GetAtt": ["ELBSecurityGroup", "GroupId"]}
+      ],
+      "Subnets": [
+        { "Ref": "PublicSubnetA" },
+        { "Ref": "PublicSubnetB" }
+      ],
+      "Listeners": [
+        {
+          "LoadBalancerPort": "80",
+          "InstancePort": "80",
+          "Protocol": "HTTP" 
+        },
+        {
+          "LoadBalancerPort": "22",
+          "InstancePort": "22",
+          "Protocol": "TCP"
+        }
+      ],
+      "HealthCheck": {
+        "Target": "HTTP:80/",
+        "HealthyThreshold": "3",
+        "UnhealthyThreshold": "5",
+        "Interval": "10",
+        "Timeout": "5"
+      },
+      "AccessLoggingPolicy": {
+        "S3BucketName": { "Ref": "S3LogBucket" },
+        "S3BucketPrefix": "mybb-access-logs",
+        "Enabled": "true",
+        "EmitInterval": "5"
+      }
+    }
+  },
+  "DBSubnetGroup" : {
+    "Type" : "AWS::RDS::DBSubnetGroup",
+    "Properties" : {
+      "DBSubnetGroupDescription" : "Subnets from which RDS instance will be reachable",
+      "SubnetIds" : [
+        { "Ref": "PublicSubnetA" },
+        { "Ref": "PublicSubnetB" }]
+    }
+  },
+  "DBInstance" : {
+    "Type": "AWS::RDS::DBInstance",
+    "Properties": {
+      "DBInstanceIdentifier"  : { "Ref" : "DBInstanceName" },
+      "Engine"            : "MySQL",
+      "DBInstanceClass"   : { "Ref" : "DBClass" },
+      "StorageType"       : { "Ref" : "DBStorageType" },
+      "VPCSecurityGroups" : [{ "Ref" : "RDSSecurityGroup" }],
+      "DBSubnetGroupName" : { "Ref": "DBSubnetGroup" },
+      "AllocatedStorage"  : { "Ref" : "DBAllocatedStorage" },
+      "DBName"  : {
+        "Fn::If" : [
+          "UseDbSnapshot",
+          { "Ref" : "AWS::NoValue"},
+          { "Ref" : "DBName" }
+        ]
+      },
+      "MasterUsername" : {
+        "Fn::If" : [
+          "UseDbSnapshot",
+          { "Ref" : "AWS::NoValue"},
+          { "Ref" : "DBUsername" }
+      ]},
+      "MasterUserPassword" : {
+        "Fn::If" : [
+          "UseDbSnapshot",
+          { "Ref" : "AWS::NoValue"},
+          { "Ref" : "DBPassword" }
+      ]},
+      "DBSnapshotIdentifier" : {
+        "Fn::If" : [
+          "UseDbSnapshot",
+          { "Ref" : "DBSnapshotIdentifier" },
+          { "Ref" : "AWS::NoValue"}
+        ]
+      },
+      "MultiAZ" : { "Ref" : "DBMultiAZ" }
+    },
+    "DeletionPolicy" : "Snapshot"
+    },
+    "EC2ScalingGroup" : {
+      "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "Properties" : {
+        "AvailabilityZones" : { "Fn::GetAZs" : ""},
+        "LaunchConfigurationName" : { "Ref" : "LaunchConfig" },
+        "MinSize" : "1",
+        "MaxSize" : "2",
+        "LoadBalancerNames" : [ { "Ref" : "MyBBBalancer" } ],
+        "VPCZoneIdentifier": [
+          { "Ref": "PublicSubnetA" },
+          { "Ref": "PublicSubnetB" }
+        ],
+        "NotificationConfigurations" : {
+          "TopicARN" : { "Ref" : "NotificationTopic" },
+          "NotificationTypes" : [ "autoscaling:EC2_INSTANCE_LAUNCH",
+                                  "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+                                  "autoscaling:EC2_INSTANCE_TERMINATE",
+                                  "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"]
+        }
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M",
+          "Count"   : "1"
+        }
+      },
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": "1",
+          "MaxBatchSize": "1",
+          "PauseTime" : "PT15M",
+          "WaitOnResourceSignals": "true"
+        }
+      }
+    },
+    "LaunchConfig" : {
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata": {
+        "Comment": "Install MyBB application with dependencies.",
+        "AWS::CloudFormation::Init": {
+          "config": {
+
+            "packages": {
+              "yum": {
+                "nginx": [],
+                "php": [],
+                "php-gd": [],
+                "php-mbstring": [],
+                "php-mysqlnd": [],
+                "mysql": []
+              }
+            },
+
+            "sources": {
+              "/tmp/mybb_installation": "https://github.com/agubagu/mybb_task/tarball/master"
+            },
+
+            "files": {
+              "/etc/cfn/cfn-hup.conf": {
+                "content": { "Fn::Join": ["", [
+                  "[main]\n",
+                  "stack=", { "Ref": "AWS::StackId" }, "\n",
+                  "region=", { "Ref": "AWS::Region" }, "\n"
+                ]]},
+                "mode": "000400",
+                "owner": "root",
+                "group": "root"
+              },
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                "content": { "Fn::Join": ["", [
+                  "[cfn-auto-reloader-hook]\n",
+                  "triggers=post.update\n",
+                  "path=Resources.LaunchConfig.Metadata.AWS::CloudFormation::Init\n",
+                  "action=/opt/aws/bin/cfn-init -v ",
+                  "   --stack ", { "Ref": "AWS::StackName" },
+                  "   --resource LaunchConfig ",
+                  "   --region ", { "Ref": "AWS::Region" }, "\n",
+                  "runas=root\n"
+                ]]}
+              }
+            },
+            "commands": {
+              "install": {
+                "command": "/bin/bash ./install.sh",
+                "cwd": "/tmp/mybb/Source",
+                "env": {
+                  "MYBB_DOMAINNAME": { "Fn::GetAtt": [ "MyBBBalancer", "DNSName" ] },
+                  "MYBB_ADMINEMAIL": { "Ref": "OperationalEMail" },
+                  "MYBB_DBNAME": { "Ref": "DBName" },
+                  "MYBB_DBUSERNAME": { "Ref": "DBUsername" },
+                  "MYBB_DBPASSWORD": { "Ref": "DBPassword" },
+                  "MYBB_DBHOSTNAME": { "Fn::GetAtt": [ "DBInstance", "Endpoint.Address" ] },
+                  "MYBB_DBPORT": "3306"
+                }
+              }
+            },
+
+            "services": {
+              "sysvinit": {
+                "nginx": {
+                  "enabled": "true",
+                  "ensureRunning": "true"
+                },
+                "cfn-hup": {
+                  "enabled": "true",
+                  "ensureRunning": "true",
+                  "files": [
+                    "/etc/cfn/cfn-hup.conf",
+                    "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+                  ]
+                }
+              }
+            }
+
+          }
+        }
+      },
+      "Properties": {
+        "KeyName": { "Ref": "SSHKeyName" },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "SecurityGroups": [
+          {"Fn::GetAtt": ["WEBSecurityGroup", "GroupId"]}, {"Fn::GetAtt": ["SSHSecurityGroup", "GroupId"]}
+        ],
+        "ImageId": { "Fn::FindInMap": [ "AMIByRegion", { "Ref": "AWS::Region" }, "hvm64" ] },
+        "UserData": { "Fn::Base64": { "Fn::Join": ["", [
+          "#!/bin/bash -xe\n",
+          "yum update -y aws-cfn-bootstrap\n",
+
+          "/opt/aws/bin/cfn-init -v ",
+          "   --stack ", { "Ref": "AWS::StackName" },
+          "   --resource LaunchConfig ",
+          "   --region ", { "Ref": "AWS::Region" }, "\n",
+
+          "/opt/aws/bin/cfn-signal -e $? ",
+          "   --stack ", { "Ref": "AWS::StackName" },
+          "   --resource LaunchConfig ",
+          "   --region ", { "Ref": "AWS::Region" }, "\n"
+        ]]}}
+      }
+    },
+    "EC2ScaleUpPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "EC2ScalingGroup" },
+        "Cooldown" : "60",
+        "ScalingAdjustment" : "1"
+      }
+    },
+    "EC2ScaleDownPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "EC2ScalingGroup" },
+        "Cooldown" : "60",
+        "ScalingAdjustment" : "-1"
+      }
+    },
+    "CPUAlarmHigh": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Scale-up if CPU > 90% for 10 minutes",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "90",
+        "AlarmActions": [ { "Ref": "EC2ScaleUpPolicy" } ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": { "Ref": "EC2ScalingGroup" }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
+    },
+    "CPUAlarmLow": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Scale-down if CPU < 70% for 10 minutes",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "70",
+        "AlarmActions": [ { "Ref": "EC2ScaleDownPolicy" } ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": { "Ref": "EC2ScalingGroup" }
+          }
+        ],
+        "ComparisonOperator": "LessThanThreshold"
+      }
+    }
+  },
+  "Outputs": {
+  }
+}
